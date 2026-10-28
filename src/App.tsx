@@ -100,14 +100,16 @@ export const App: React.FC = () => {
           saveStoredTransactions(res.data.transactions);
         }
         if (res.data.settings) {
-          const updatedSettings = {
-            ...settings,
-            orgName: res.data.settings.orgName || settings.orgName,
-            initialBalance: res.data.settings.initialBalance ?? settings.initialBalance,
-            lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          };
-          setSettings(updatedSettings);
-          saveStoredSettings(updatedSettings);
+          setSettings((prev) => {
+            const updatedSettings = {
+              ...prev,
+              orgName: res.data?.settings?.orgName || prev.orgName,
+              initialBalance: res.data?.settings?.initialBalance ?? prev.initialBalance,
+              lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+            };
+            saveStoredSettings(updatedSettings);
+            return updatedSettings;
+          });
         }
         if (res.data.logs && res.data.logs.length > 0) {
           setLogs(res.data.logs);

@@ -1,60 +1,21 @@
 import { Transaction, AuditLog, AppSettings, UserRole } from '../types';
 
+export const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxALZGjCFu70HicDJkbo9ebbjbvqRP-m7g07h6szWyaaEre44AeyyedIT2ji7n3vabRng/exec';
+
 const STORAGE_KEYS = {
-  TRANSACTIONS: 'penakas_transactions',
-  SETTINGS: 'penakas_settings',
-  LOGS: 'penakas_audit_logs',
+  TRANSACTIONS: 'penakas_v2_transactions',
+  SETTINGS: 'penakas_v2_settings',
+  LOGS: 'penakas_v2_audit_logs',
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
-  orgName: 'BEM / Himpunan Mahasiswa',
-  initialBalance: 1500000, // Rp 1.500.000 saldo awal default
-  googleSheetUrl: '',
+  orgName: 'Kas Organisasi',
+  initialBalance: 0,
+  googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL,
   currentRole: 'bendahara',
 };
 
-const DEFAULT_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'tx-1',
-    date: new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0],
-    type: 'income',
-    amount: 500000,
-    category: 'Iuran Kas Anggota',
-    description: 'Iuran kas wajib bulan ini dari 25 anggota divisi acara',
-    author: 'Bendahara',
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-  },
-  {
-    id: 'tx-2',
-    date: new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0],
-    type: 'income',
-    amount: 1200000,
-    category: 'Dana Usaha (Danus)',
-    description: 'Hasil jualan risol mayo & merchandise kampus minggu ke-3',
-    author: 'Bendahara',
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-  },
-  {
-    id: 'tx-3',
-    date: new Date(Date.now() - 1 * 86400000).toISOString().split('T')[0],
-    type: 'expense',
-    amount: 350000,
-    category: 'Konsumsi Rapat',
-    description: 'Beli snack & air mineral rapat pleno persiapan proker',
-    author: 'Bendahara',
-    createdAt: new Date(Date.now() - 1 * 86400000).toISOString(),
-  },
-  {
-    id: 'tx-4',
-    date: new Date().toISOString().split('T')[0],
-    type: 'expense',
-    amount: 180000,
-    category: 'Perlengkapan & ATK',
-    description: 'Kertas HVS, spidol, dan print proposal sponsorship',
-    author: 'Bendahara',
-    createdAt: new Date().toISOString(),
-  },
-];
+const DEFAULT_TRANSACTIONS: Transaction[] = [];
 
 const DEFAULT_LOGS: AuditLog[] = [
   {
@@ -62,7 +23,7 @@ const DEFAULT_LOGS: AuditLog[] = [
     timestamp: new Date().toLocaleString('id-ID'),
     author: 'Admin / Developer',
     action: 'SETTINGS',
-    details: 'Inisialisasi aplikasi PenaKas pertama kali dengan saldo awal Rp 1.500.000',
+    details: 'Inisialisasi sistem database Google Sheets PenaKas',
   },
 ];
 
@@ -70,7 +31,13 @@ export const getStoredSettings = (): AppSettings => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      // Pastikan googleSheetUrl selalu terpasang ke URL default jika kosong
+      googleSheetUrl: parsed.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL,
+    };
   } catch (e) {
     console.error('Failed to parse settings from localStorage', e);
     return DEFAULT_SETTINGS;
@@ -86,7 +53,7 @@ export const getStoredTransactions = (): Transaction[] => {
     const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
     if (!raw) return DEFAULT_TRANSACTIONS;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_TRANSACTIONS;
+    return Array.isArray(parsed) ? parsed : DEFAULT_TRANSACTIONS;
   } catch (e) {
     console.error('Failed to parse transactions from localStorage', e);
     return DEFAULT_TRANSACTIONS;
@@ -124,7 +91,7 @@ export const addStoredLog = (
     details,
     transactionId,
   };
-  const updatedLogs = [newLog, ...currentLogs].slice(0, 150); // Keep last 150
+  const updatedLogs = [newLog, ...currentLogs].slice(0, 150);
   localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updatedLogs));
   return newLog;
 };

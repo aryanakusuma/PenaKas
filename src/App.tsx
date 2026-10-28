@@ -39,6 +39,7 @@ export const App: React.FC = () => {
   // 2. UI & Filter State
   const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [hasLoadedInitial, setHasLoadedInitial] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // 3. Modals State
@@ -122,6 +123,7 @@ export const App: React.FC = () => {
       if (!isSilent) showToast('Koneksi internet bermasalah', 'error');
     } finally {
       setIsSyncing(false);
+      setHasLoadedInitial(true);
     }
   };
 
@@ -364,6 +366,7 @@ export const App: React.FC = () => {
           totalIncome={totalIncome}
           totalExpense={totalExpense}
           finalBalance={finalBalance}
+          isLoading={isSyncing && !hasLoadedInitial}
           onOpenIncomeModal={() => {
             setEditingTransaction(null);
             setActiveTxType('income');

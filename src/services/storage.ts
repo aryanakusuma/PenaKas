@@ -3,10 +3,25 @@ import { Transaction, AuditLog, AppSettings, UserRole } from '../types';
 export const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxALZGjCFu70HicDJkbo9ebbjbvqRP-m7g07h6szWyaaEre44AeyyedIT2ji7n3vabRng/exec';
 
 const STORAGE_KEYS = {
-  TRANSACTIONS: 'penakas_v2_transactions',
-  SETTINGS: 'penakas_v2_settings',
-  LOGS: 'penakas_v2_audit_logs',
+  TRANSACTIONS: 'penakas_v3_transactions',
+  SETTINGS: 'penakas_v3_settings',
+  LOGS: 'penakas_v3_audit_logs',
 };
+
+// Bersihkan cache dan data contoh lama dari HP/Laptop secara otomatis
+try {
+  localStorage.removeItem('kaskita_transactions');
+  localStorage.removeItem('kaskita_settings');
+  localStorage.removeItem('kaskita_audit_logs');
+  localStorage.removeItem('penakas_transactions');
+  localStorage.removeItem('penakas_settings');
+  localStorage.removeItem('penakas_audit_logs');
+  localStorage.removeItem('penakas_v2_transactions');
+  localStorage.removeItem('penakas_v2_settings');
+  localStorage.removeItem('penakas_v2_audit_logs');
+} catch (e) {
+  // Abaikan jika di lingkungan tanpa localStorage
+}
 
 const DEFAULT_SETTINGS: AppSettings = {
   orgName: 'Kas Organisasi',
@@ -17,25 +32,23 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const DEFAULT_TRANSACTIONS: Transaction[] = [];
 
-const DEFAULT_LOGS: AuditLog[] = [
-  {
-    id: 'log-1',
-    timestamp: new Date().toLocaleString('id-ID'),
-    author: 'Admin / Developer',
-    action: 'SETTINGS',
-    details: 'Inisialisasi sistem database Google Sheets PenaKas',
-  },
-];
+const DEFAULT_LOGS: AuditLog[] = [];
 
 export const getStoredSettings = (): AppSettings => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
+    
+    // Pastikan tidak membawa sisa saldo contoh 1.500.000
+    if (parsed.initialBalance === 1500000 || parsed.orgName === 'BEM / Himpunan Mahasiswa') {
+      parsed.initialBalance = 0;
+      parsed.orgName = 'Kas Organisasi';
+    }
+
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      // Pastikan googleSheetUrl selalu terpasang ke URL default jika kosong
       googleSheetUrl: parsed.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL,
     };
   } catch (e) {

@@ -6,7 +6,8 @@ import {
   MinusCircle, 
   Edit3, 
   Building2,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 import { formatIDR } from '../utils/formatters';
 
@@ -15,6 +16,7 @@ interface BalanceCardProps {
   totalIncome: number;
   totalExpense: number;
   finalBalance: number;
+  isLoading?: boolean;
   onOpenIncomeModal: () => void;
   onOpenExpenseModal: () => void;
   onEditInitialBalance: () => void;
@@ -28,6 +30,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   totalIncome,
   totalExpense,
   finalBalance,
+  isLoading = false,
   onOpenIncomeModal,
   onOpenExpenseModal,
   onEditInitialBalance,
@@ -65,11 +68,20 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
 
           {/* Nominal Saldo Akhir */}
           <div className="mt-1">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              {formatIDR(finalBalance)}
-            </h2>
+            {isLoading ? (
+              <div className="py-1">
+                <span className="text-xl sm:text-2xl font-bold text-emerald-300/90 animate-pulse flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-emerald-400" />
+                  Menyinkronkan data kas...
+                </span>
+              </div>
+            ) : (
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+                {formatIDR(finalBalance)}
+              </h2>
+            )}
             <p className="text-xs text-slate-300/80 mt-1">
-              Dihitung otomatis: Saldo Awal + Total Masuk - Total Keluar
+              {isLoading ? 'Sedang mengambil saldo terbaru dari Google Sheet...' : 'Dihitung otomatis: Saldo Awal + Total Masuk - Total Keluar'}
             </p>
           </div>
 

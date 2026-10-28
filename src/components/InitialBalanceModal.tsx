@@ -31,7 +31,7 @@ export const InitialBalanceModal: React.FC<InitialBalanceModalProps> = ({
     e.preventDefault();
     const cleanNum = parseCleanNumber(balanceStr);
     onSave({
-      orgName: name.trim() || 'Kas Organisasi',
+      orgName: name.trim() || 'PC IPM Pringsewu',
       initialBalance: cleanNum,
     });
     onClose();
@@ -46,7 +46,7 @@ export const InitialBalanceModal: React.FC<InitialBalanceModalProps> = ({
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-base">Atur Kas Organisasi</h3>
+            <h3 className="font-bold text-base">Atur Kas PC IPM Pringsewu</h3>
           </div>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition-colors">
             <X className="w-5 h-5" />

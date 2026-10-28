@@ -40,10 +40,10 @@ export const getStoredSettings = (): AppSettings => {
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
     
-    // Pastikan tidak membawa sisa saldo contoh 1.500.000
-    if (parsed.initialBalance === 1500000 || parsed.orgName === 'BEM / Himpunan Mahasiswa') {
+    // Pastikan tidak membawa sisa saldo contoh 1.500.000 atau nama default lama
+    if (parsed.initialBalance === 1500000 || parsed.orgName === 'BEM / Himpunan Mahasiswa' || parsed.orgName === 'Kas Organisasi') {
       parsed.initialBalance = 0;
-      parsed.orgName = 'Kas Organisasi';
+      parsed.orgName = 'PC IPM Pringsewu';
     }
 
     return {

@@ -102,9 +102,14 @@ export const App: React.FC = () => {
         }
         if (res.data.settings) {
           setSettings((prev) => {
+            const sheetOrg = res.data?.settings?.orgName;
+            const cleanOrg = (!sheetOrg || sheetOrg === 'Kas Organisasi' || sheetOrg === 'BEM / Himpunan Mahasiswa')
+              ? 'PC IPM Pringsewu'
+              : sheetOrg;
+
             const updatedSettings = {
               ...prev,
-              orgName: res.data?.settings?.orgName || prev.orgName,
+              orgName: cleanOrg,
               initialBalance: res.data?.settings?.initialBalance ?? prev.initialBalance,
               lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
             };

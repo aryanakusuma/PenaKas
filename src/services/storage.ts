@@ -24,7 +24,7 @@ try {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  orgName: 'Kas Organisasi',
+  orgName: 'PC IPM Pringsewu',
   initialBalance: 0,
   googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL,
   currentRole: 'bendahara',

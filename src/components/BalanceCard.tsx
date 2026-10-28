@@ -51,14 +51,14 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <span className="text-xs uppercase font-bold tracking-wider text-emerald-400/90 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Total Saldo Kas Organisasi
+              Total Saldo Kas PC IPM Pringsewu
             </span>
 
             {/* Tombol Ubah Saldo Awal */}
             <button
               onClick={onEditInitialBalance}
               className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-sm transition-colors border border-white/10"
-              title="Atur Saldo Awal Organisasi"
+              title="Atur Saldo Awal PC IPM Pringsewu"
             >
               <Building2 className="w-3 h-3 text-emerald-300" />
               <span>Saldo Awal: {formatIDR(initialBalance)}</span>

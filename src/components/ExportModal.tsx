@@ -16,6 +16,7 @@ interface ExportModalProps {
   onClose: () => void;
   transactions: Transaction[];
   settings: AppSettings;
+  activePeriodName: string;
   initialBalance: number;
   totalIncome: number;
   totalExpense: number;
@@ -27,6 +28,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onClose,
   transactions,
   settings,
+  activePeriodName,
   initialBalance,
   totalIncome,
   totalExpense,
@@ -36,7 +38,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   // Unduh data sebagai file CSV yang kompatibel dengan Excel
   const handleDownloadCSV = () => {
-    const headers = ['ID', 'Tanggal', 'Tipe', 'Kategori', 'Nominal (Rp)', 'Keterangan', 'Diinput Oleh'];
+    const headers = ['ID', 'Tanggal', 'Tipe', 'Kategori', 'Nominal (Rp)', 'Keterangan', 'Diinput Oleh', 'Periode'];
     const rows = transactions.map((t) => [
       `"${t.id}"`,
       `"${t.date}"`,
@@ -45,6 +47,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       t.amount,
       `"${(t.description || '').replace(/"/g, '""')}"`,
       `"${t.author || 'Bendahara'}"`,
+      `"${activePeriodName}"`,
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
@@ -53,7 +56,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const link = document.createElement('a');
     link.setAttribute('href', url);
     const dateStr = new Date().toISOString().split('T')[0];
-    link.setAttribute('download', `Rekap_Kas_${settings.orgName.replace(/\s+/g, '_')}_${dateStr}.csv`);
+    const safeOrg = settings.orgName.replace(/\s+/g, '_');
+    const safePeriod = activePeriodName.replace(/\s+/g, '_');
+    link.setAttribute('download', `Rekap_Kas_${safeOrg}_Periode_${safePeriod}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -77,7 +82,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base">Unduh & Cetak Laporan Kas</h3>
-              <p className="text-xs text-slate-300">Ekspor rekap untuk LPJ organisasi atau pembina</p>
+              <p className="text-xs text-slate-300">Ekspor rekap LPJ Periode {activePeriodName}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-white/20 transition-colors">
@@ -99,7 +104,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </div>
               <p className="font-bold text-slate-800 text-sm">Unduh File Excel / CSV</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Bisa langsung dibuka di Microsoft Excel, Google Sheets, atau WPS
+                Format lengkap rekap Periode {activePeriodName} untuk Microsoft Excel atau WPS
               </p>
             </button>
 
@@ -112,7 +117,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </div>
               <p className="font-bold text-slate-800 text-sm">Cetak Laporan / Simpan PDF</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Format tabel rapi siap tanda tangan untuk laporan pengurus
+                Format resmi LPJ Musycab/Musyda siap tanda tangan Ketua & Bendahara
               </p>
             </button>
           </div>
@@ -126,7 +131,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <p className="text-xs font-semibold text-slate-600">
                 {settings.orgName}
               </p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <div className="mt-1">
+                <span className="inline-block px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Masa Jabatan / Periode: {activePeriodName}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
                 Dicetak pada: {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
@@ -162,23 +172,31 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {transactions.slice(0, 10).map((t) => (
-                    <tr key={t.id}>
-                      <td className="py-2 text-slate-500">{t.date}</td>
-                      <td className="py-2 font-medium text-slate-800">
-                        {t.category}
-                        {t.description && <span className="text-slate-400 block text-[11px] truncate max-w-[180px]">{t.description}</span>}
-                      </td>
-                      <td className={`py-2 text-right font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {t.type === 'income' ? '+' : '-'} {formatIDR(t.amount)}
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-4 text-center text-slate-400 text-xs italic">
+                        Belum ada transaksi pada periode {activePeriodName}.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    transactions.slice(0, 10).map((t) => (
+                      <tr key={t.id}>
+                        <td className="py-2 text-slate-500">{t.date}</td>
+                        <td className="py-2 font-medium text-slate-800">
+                          {t.category}
+                          {t.description && <span className="text-slate-400 block text-[11px] truncate max-w-[180px]">{t.description}</span>}
+                        </td>
+                        <td className={`py-2 text-right font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {t.type === 'income' ? '+' : '-'} {formatIDR(t.amount)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
               {transactions.length > 10 && (
                 <p className="text-center text-[11px] text-slate-400 py-2">
-                  ... dan {transactions.length - 10} transaksi lainnya (unduh file Excel untuk daftar lengkap).
+                  ... dan {transactions.length - 10} transaksi lainnya di periode ini (unduh file Excel untuk daftar lengkap).
                 </p>
               )}
             </div>
@@ -187,13 +205,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <div className="pt-6 grid grid-cols-2 gap-4 text-center text-xs text-slate-600 print:pt-10">
               <div>
                 <p>Mengetahui,</p>
-                <p className="font-bold text-slate-800">Ketua Organisasi</p>
+                <p className="font-bold text-slate-800">Ketua Umum PC IPM Pringsewu</p>
                 <div className="h-16" />
                 <p className="border-t border-slate-300 pt-1 font-semibold mx-4">( .............................. )</p>
               </div>
               <div>
                 <p>Dibuat oleh,</p>
-                <p className="font-bold text-slate-800">Bendahara Organisasi</p>
+                <p className="font-bold text-slate-800">Bendahara Umum</p>
                 <div className="h-16" />
                 <p className="border-t border-slate-300 pt-1 font-semibold mx-4">( .............................. )</p>
               </div>

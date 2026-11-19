@@ -1,54 +1,76 @@
-import { Transaction, AuditLog, AppSettings, UserRole } from '../types';
+import { Transaction, AuditLog, AppSettings, UserRole, Period } from '../types';
 
 export const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxALZGjCFu70HicDJkbo9ebbjbvqRP-m7g07h6szWyaaEre44AeyyedIT2ji7n3vabRng/exec';
 
 const STORAGE_KEYS = {
-  TRANSACTIONS: 'penakas_v3_transactions',
-  SETTINGS: 'penakas_v3_settings',
-  LOGS: 'penakas_v3_audit_logs',
+  TRANSACTIONS: 'penakas_v4_transactions',
+  SETTINGS: 'penakas_v4_settings',
+  LOGS: 'penakas_v4_audit_logs',
 };
 
-// Bersihkan cache dan data contoh lama dari HP/Laptop secara otomatis
-try {
-  localStorage.removeItem('kaskita_transactions');
-  localStorage.removeItem('kaskita_settings');
-  localStorage.removeItem('kaskita_audit_logs');
-  localStorage.removeItem('penakas_transactions');
-  localStorage.removeItem('penakas_settings');
-  localStorage.removeItem('penakas_audit_logs');
-  localStorage.removeItem('penakas_v2_transactions');
-  localStorage.removeItem('penakas_v2_settings');
-  localStorage.removeItem('penakas_v2_audit_logs');
-} catch (e) {
-  // Abaikan jika di lingkungan tanpa localStorage
-}
+// Default periode pertama
+export const DEFAULT_INITIAL_PERIOD: Period = {
+  id: 'periode-2026-2028',
+  name: '2026-2028',
+  initialBalance: 0,
+  status: 'active',
+  createdAt: new Date().toISOString(),
+};
 
 const DEFAULT_SETTINGS: AppSettings = {
   orgName: 'PC IPM Pringsewu',
   initialBalance: 0,
   googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL,
   currentRole: 'bendahara',
+  activePeriodId: DEFAULT_INITIAL_PERIOD.id,
+  periods: [DEFAULT_INITIAL_PERIOD],
 };
 
 const DEFAULT_TRANSACTIONS: Transaction[] = [];
-
 const DEFAULT_LOGS: AuditLog[] = [];
 
 export const getStoredSettings = (): AppSettings => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    // Cek v4 dulu, jika belum ada cek v3
+    let raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    if (!raw) {
+      raw = localStorage.getItem('penakas_v3_settings');
+    }
+
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
-    
-    // Pastikan tidak membawa sisa saldo contoh 1.500.000 atau nama default lama
-    if (parsed.initialBalance === 1500000 || parsed.orgName === 'BEM / Himpunan Mahasiswa' || parsed.orgName === 'Kas Organisasi') {
-      parsed.initialBalance = 0;
-      parsed.orgName = 'PC IPM Pringsewu';
+
+    // Pastikan tidak membawa nama default lama
+    let cleanOrg = parsed.orgName;
+    if (!cleanOrg || cleanOrg === 'BEM / Himpunan Mahasiswa' || cleanOrg === 'Kas Organisasi') {
+      cleanOrg = 'PC IPM Pringsewu';
     }
+
+    // Pastikan daftar periode valid
+    let periods: Period[] = Array.isArray(parsed.periods) && parsed.periods.length > 0 
+      ? parsed.periods 
+      : [{
+          id: 'periode-2026-2028',
+          name: '2026-2028',
+          initialBalance: Number(parsed.initialBalance) || 0,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        }];
+
+    let activePeriodId = parsed.activePeriodId;
+    if (!activePeriodId || !periods.some(p => p.id === activePeriodId)) {
+      activePeriodId = periods[0].id;
+    }
+
+    const currentPeriod = periods.find(p => p.id === activePeriodId) || periods[0];
 
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
+      orgName: cleanOrg,
+      initialBalance: currentPeriod.initialBalance ?? 0,
+      activePeriodId: activePeriodId,
+      periods: periods,
       googleSheetUrl: parsed.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL,
     };
   } catch (e) {
@@ -63,10 +85,21 @@ export const saveStoredSettings = (settings: AppSettings): void => {
 
 export const getStoredTransactions = (): Transaction[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+    let raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+    if (!raw) {
+      raw = localStorage.getItem('penakas_v3_transactions');
+    }
     if (!raw) return DEFAULT_TRANSACTIONS;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEFAULT_TRANSACTIONS;
+    
+    if (Array.isArray(parsed)) {
+      // Pastikan setiap transaksi memiliki periodId (jika belum ada, masukkan ke periode default pertama)
+      return parsed.map((tx: any) => ({
+        ...tx,
+        periodId: tx.periodId || DEFAULT_INITIAL_PERIOD.id,
+      }));
+    }
+    return DEFAULT_TRANSACTIONS;
   } catch (e) {
     console.error('Failed to parse transactions from localStorage', e);
     return DEFAULT_TRANSACTIONS;
@@ -79,7 +112,10 @@ export const saveStoredTransactions = (transactions: Transaction[]): void => {
 
 export const getStoredLogs = (): AuditLog[] => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
+    let raw = localStorage.getItem(STORAGE_KEYS.LOGS);
+    if (!raw) {
+      raw = localStorage.getItem('penakas_v3_logs');
+    }
     if (!raw) return DEFAULT_LOGS;
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : DEFAULT_LOGS;

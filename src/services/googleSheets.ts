@@ -144,11 +144,16 @@ export const deleteTransactionFromGoogleSheet = async (
 };
 
 /**
- * Memperbarui pengaturan (Saldo Awal, Nama Organisasi) ke Google Sheet
+ * Memperbarui pengaturan (Saldo Awal, Nama Organisasi, Periode) ke Google Sheet
  */
 export const syncSettingsToGoogleSheet = async (
   url: string,
-  settings: { orgName: string; initialBalance: number },
+  settings: { 
+    orgName: string; 
+    initialBalance: number;
+    activePeriodId?: string;
+    periods?: any[];
+  },
   author: string
 ): Promise<{ success: boolean; message?: string; error?: string }> => {
   if (!url || !url.startsWith('http')) {

@@ -15,6 +15,8 @@ import { formatIDR, formatDateIndo } from '../utils/formatters';
 
 interface TransactionListProps {
   transactions: Transaction[];
+  activePeriodName?: string;
+  isPeriodClosed?: boolean;
   onEdit: (tx: Transaction) => void;
   onDelete: (id: string) => void;
   onOpenAddModal: (type: TransactionType) => void;
@@ -22,6 +24,8 @@ interface TransactionListProps {
 
 export const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
+  activePeriodName = '2026-2028',
+  isPeriodClosed = false,
   onEdit,
   onDelete,
   onOpenAddModal,
@@ -108,12 +112,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             <Receipt className="w-7 h-7" />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-700">Belum ada transaksi ditemukan</p>
+            <p className="text-sm font-bold text-slate-700">
+              Belum ada transaksi di Periode {activePeriodName}
+            </p>
             <p className="text-xs text-slate-400 mt-0.5">
-              {searchQuery ? 'Coba ubah kata kunci pencarian kamu' : 'Mulai catat pemasukan atau pengeluaran pertama'}
+              {searchQuery ? 'Coba ubah kata kunci pencarian kamu' : isPeriodClosed ? 'Periode ini sudah tutup buku dan tidak ada transaksi.' : 'Mulai catat pemasukan atau pengeluaran pertama untuk periode ini'}
             </p>
           </div>
-          {!searchQuery && (
+          {!searchQuery && !isPeriodClosed && (
             <div className="flex justify-center gap-2 pt-2">
               <button
                 onClick={() => onOpenAddModal('income')}

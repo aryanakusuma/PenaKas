@@ -7,12 +7,14 @@ import { InitialBalanceModal } from './components/InitialBalanceModal';
 import { DeveloperAuditLogModal } from './components/DeveloperAuditLogModal';
 import { GoogleSheetSetupModal } from './components/GoogleSheetSetupModal';
 import { ExportModal } from './components/ExportModal';
+import { PeriodManagerModal } from './components/PeriodManagerModal';
 import { 
   Transaction, 
   TransactionType, 
   UserRole, 
   AppSettings, 
-  AuditLog 
+  AuditLog,
+  Period
 } from './types';
 import { 
   getStoredSettings, 
@@ -20,7 +22,8 @@ import {
   getStoredTransactions, 
   saveStoredTransactions, 
   getStoredLogs, 
-  addStoredLog 
+  addStoredLog,
+  DEFAULT_INITIAL_PERIOD 
 } from './services/storage';
 import { 
   fetchFromGoogleSheet, 
@@ -49,6 +52,7 @@ export const App: React.FC = () => {
   const [isDeveloperModalOpen, setIsDeveloperModalOpen] = useState(false);
   const [isGoogleSheetModalOpen, setIsGoogleSheetModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
 
   // 4. PWA Installation State
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -107,10 +111,25 @@ export const App: React.FC = () => {
               ? 'PC IPM Pringsewu'
               : sheetOrg;
 
-            const updatedSettings = {
+            const sheetPeriods = res.data?.settings?.periods;
+            const sheetActivePeriodId = res.data?.settings?.activePeriodId;
+
+            const finalPeriods = Array.isArray(sheetPeriods) && sheetPeriods.length > 0
+              ? sheetPeriods
+              : prev.periods;
+
+            const finalActivePeriodId = sheetActivePeriodId && finalPeriods.some(p => p.id === sheetActivePeriodId)
+              ? sheetActivePeriodId
+              : prev.activePeriodId;
+
+            const curPeriod = finalPeriods.find(p => p.id === finalActivePeriodId) || finalPeriods[0];
+
+            const updatedSettings: AppSettings = {
               ...prev,
               orgName: cleanOrg,
-              initialBalance: res.data?.settings?.initialBalance ?? prev.initialBalance,
+              initialBalance: curPeriod.initialBalance ?? prev.initialBalance,
+              activePeriodId: finalActivePeriodId,
+              periods: finalPeriods,
               lastSynced: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
             };
             saveStoredSettings(updatedSettings);
@@ -140,22 +159,39 @@ export const App: React.FC = () => {
     showToast(`Beralih ke tampilan ${newRole === 'bendahara' ? 'Bendahara' : 'Admin/Developer'}`, 'info');
   };
 
-  // 8. Calculations & Filtering
+  // 8. Period Logic & Current Active Period
+  const activePeriod = useMemo(() => {
+    const list = settings.periods && settings.periods.length > 0 
+      ? settings.periods 
+      : [DEFAULT_INITIAL_PERIOD];
+    return list.find((p) => p.id === settings.activePeriodId) || list[0];
+  }, [settings.periods, settings.activePeriodId]);
+
+  // Transaksi KHUSUS untuk periode yang sedang dipilih
+  const periodTransactions = useMemo(() => {
+    const defaultId = settings.periods[0] ? settings.periods[0].id : DEFAULT_INITIAL_PERIOD.id;
+    return transactions.filter((t) => {
+      const tPeriod = t.periodId || defaultId;
+      return tPeriod === activePeriod.id;
+    });
+  }, [transactions, activePeriod.id, settings.periods]);
+
+  // Filter bulan dalam periode aktif
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    transactions.forEach((t) => {
+    periodTransactions.forEach((t) => {
       if (t.date) {
         const ym = t.date.substring(0, 7); // YYYY-MM
         months.add(ym);
       }
     });
     return Array.from(months).sort().reverse();
-  }, [transactions]);
+  }, [periodTransactions]);
 
   const filteredTransactions = useMemo(() => {
-    if (selectedMonth === 'ALL') return transactions;
-    return transactions.filter((t) => t.date && t.date.startsWith(selectedMonth));
-  }, [transactions, selectedMonth]);
+    if (selectedMonth === 'ALL') return periodTransactions;
+    return periodTransactions.filter((t) => t.date && t.date.startsWith(selectedMonth));
+  }, [periodTransactions, selectedMonth]);
 
   const totalIncome = useMemo(() => {
     return filteredTransactions
@@ -169,22 +205,182 @@ export const App: React.FC = () => {
       .reduce((sum, t) => sum + (t.amount || 0), 0);
   }, [filteredTransactions]);
 
-  // Total saldo akumulatif dari semua transaksi
-  const allTotalIncome = useMemo(() => {
-    return transactions
+  // Total saldo akumulatif selama periode ini
+  const allPeriodIncome = useMemo(() => {
+    return periodTransactions
       .filter((t) => t.type === 'income')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
-  }, [transactions]);
+  }, [periodTransactions]);
 
-  const allTotalExpense = useMemo(() => {
-    return transactions
+  const allPeriodExpense = useMemo(() => {
+    return periodTransactions
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + (t.amount || 0), 0);
-  }, [transactions]);
+  }, [periodTransactions]);
 
-  const finalBalance = (settings.initialBalance || 0) + allTotalIncome - allTotalExpense;
+  const finalBalance = (activePeriod.initialBalance || 0) + allPeriodIncome - allPeriodExpense;
 
-  // 9. Save Transaction (Add or Update)
+  // 9. Period Management Handlers
+  const handleSelectPeriod = (periodId: string) => {
+    const target = settings.periods.find((p) => p.id === periodId);
+    if (!target) return;
+    const updated: AppSettings = {
+      ...settings,
+      activePeriodId: periodId,
+      initialBalance: target.initialBalance ?? 0,
+    };
+    setSettings(updated);
+    saveStoredSettings(updated);
+    setSelectedMonth('ALL');
+    showToast(`Beralih ke laporan Periode ${target.name}`, 'info');
+
+    if (settings.googleSheetUrl) {
+      syncSettingsToGoogleSheet(settings.googleSheetUrl, updated, 'User').catch(console.error);
+    }
+  };
+
+  const handleCreatePeriod = ({
+    name,
+    initialBalance,
+    closePrevious,
+  }: {
+    name: string;
+    initialBalance: number;
+    closePrevious: boolean;
+  }) => {
+    const authorName = settings.currentRole === 'bendahara' ? 'Bendahara' : 'Admin/Dev';
+    const newPeriodId = 'periode-' + name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+    const updatedPeriods = settings.periods.map((p) => {
+      if (closePrevious && p.id === activePeriod.id) {
+        return {
+          ...p,
+          status: 'closed' as 'active' | 'closed',
+          closedAt: new Date().toISOString(),
+        };
+      }
+      return p;
+    });
+
+    const newPeriod: Period = {
+      id: newPeriodId,
+      name,
+      initialBalance,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextPeriods = [newPeriod, ...updatedPeriods];
+    const updatedSettings: AppSettings = {
+      ...settings,
+      activePeriodId: newPeriod.id,
+      periods: nextPeriods,
+      initialBalance: newPeriod.initialBalance,
+    };
+
+    setSettings(updatedSettings);
+    saveStoredSettings(updatedSettings);
+    setSelectedMonth('ALL');
+
+    const newLog = addStoredLog(
+      'SETTINGS',
+      authorName,
+      `Membuka Periode Baru: ${name} (Saldo Awal Rp ${initialBalance.toLocaleString('id-ID')})${
+        closePrevious ? ` dan menutup buku Periode ${activePeriod.name}` : ''
+      }`
+    );
+    setLogs((prev) => [newLog, ...prev]);
+
+    showToast(`Periode ${name} berhasil dibuka! Laporan kas siap dimulai.`, 'success');
+
+    if (settings.googleSheetUrl) {
+      syncSettingsToGoogleSheet(settings.googleSheetUrl, updatedSettings, authorName).catch(console.error);
+    }
+  };
+
+  const handleTogglePeriodStatus = (periodId: string) => {
+    const authorName = settings.currentRole === 'bendahara' ? 'Bendahara' : 'Admin/Dev';
+    const targetPeriod = settings.periods.find((p) => p.id === periodId);
+    if (!targetPeriod) return;
+
+    const newStatus: 'active' | 'closed' = targetPeriod.status === 'closed' ? 'active' : 'closed';
+    const updatedPeriods = settings.periods.map((p) => {
+      if (p.id === periodId) {
+        return {
+          ...p,
+          status: newStatus,
+          closedAt: newStatus === 'closed' ? new Date().toISOString() : undefined,
+        };
+      }
+      return p;
+    });
+
+    const updatedSettings: AppSettings = {
+      ...settings,
+      periods: updatedPeriods,
+    };
+    setSettings(updatedSettings);
+    saveStoredSettings(updatedSettings);
+
+    const newLog = addStoredLog(
+      'SETTINGS',
+      authorName,
+      `Mengubah status Periode ${targetPeriod.name} menjadi ${newStatus === 'closed' ? 'Tutup Buku' : 'Aktif'}`
+    );
+    setLogs((prev) => [newLog, ...prev]);
+
+    showToast(
+      `Periode ${targetPeriod.name} sekarang ${newStatus === 'closed' ? 'Ditutup Buku' : 'Diaktifkan kembali'}`,
+      'info'
+    );
+
+    if (settings.googleSheetUrl) {
+      syncSettingsToGoogleSheet(settings.googleSheetUrl, updatedSettings, authorName).catch(console.error);
+    }
+  };
+
+  const handleDeletePeriod = (periodId: string) => {
+    if (settings.periods.length <= 1) {
+      alert('Tidak bisa menghapus satu-satunya periode yang ada.');
+      return;
+    }
+    const targetPeriod = settings.periods.find((p) => p.id === periodId);
+    if (!targetPeriod) return;
+
+    const remainingPeriods = settings.periods.filter((p) => p.id !== periodId);
+    const newActiveId = settings.activePeriodId === periodId ? remainingPeriods[0].id : settings.activePeriodId;
+    const activeTarget = remainingPeriods.find((p) => p.id === newActiveId) || remainingPeriods[0];
+
+    // Hapus juga transaksi dari periode ini
+    const remainingTransactions = transactions.filter((t) => t.periodId !== periodId);
+    setTransactions(remainingTransactions);
+    saveStoredTransactions(remainingTransactions);
+
+    const updatedSettings: AppSettings = {
+      ...settings,
+      activePeriodId: newActiveId,
+      periods: remainingPeriods,
+      initialBalance: activeTarget.initialBalance ?? 0,
+    };
+    setSettings(updatedSettings);
+    saveStoredSettings(updatedSettings);
+
+    const authorName = settings.currentRole === 'bendahara' ? 'Bendahara' : 'Admin/Dev';
+    const newLog = addStoredLog(
+      'DELETE',
+      authorName,
+      `Menghapus Periode ${targetPeriod.name} berserta transaksinya`
+    );
+    setLogs((prev) => [newLog, ...prev]);
+
+    showToast(`Periode ${targetPeriod.name} berhasil dihapus`, 'info');
+
+    if (settings.googleSheetUrl) {
+      syncSettingsToGoogleSheet(settings.googleSheetUrl, updatedSettings, authorName).catch(console.error);
+    }
+  };
+
+  // 10. Save Transaction (Add or Update)
   const handleSaveTransaction = async (txData: {
     id?: string;
     date: string;
@@ -200,6 +396,7 @@ export const App: React.FC = () => {
     let newTransactions: Transaction[];
 
     if (isEditing && txData.id) {
+      const existing = transactions.find((t) => t.id === txData.id);
       updatedTx = {
         id: txData.id,
         date: txData.date,
@@ -209,6 +406,7 @@ export const App: React.FC = () => {
         description: txData.description,
         author: authorName,
         createdAt: new Date().toISOString(),
+        periodId: existing?.periodId || activePeriod.id,
       };
       newTransactions = transactions.map((t) => (t.id === txData.id ? updatedTx : t));
       
@@ -225,10 +423,11 @@ export const App: React.FC = () => {
         description: txData.description,
         author: authorName,
         createdAt: new Date().toISOString(),
+        periodId: activePeriod.id,
       };
       newTransactions = [updatedTx, ...transactions];
 
-      const newLog = addStoredLog('CREATE', authorName, `Tambah ${txData.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}: ${txData.category} (Rp ${txData.amount.toLocaleString('id-ID')})`, updatedTx.id);
+      const newLog = addStoredLog('CREATE', authorName, `Tambah ${txData.type === 'income' ? 'Pemasukan' : 'Pengeluaran'} [Periode ${activePeriod.name}]: ${txData.category} (Rp ${txData.amount.toLocaleString('id-ID')})`, updatedTx.id);
       setLogs((prev) => [newLog, ...prev]);
       showToast('Transaksi baru berhasil dicatat!', 'success');
     }
@@ -242,7 +441,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // 10. Delete Transaction
+  // 11. Delete Transaction
   const handleDeleteTransaction = async (id: string) => {
     const tx = transactions.find((t) => t.id === id);
     if (!tx) return;
@@ -265,27 +464,44 @@ export const App: React.FC = () => {
     }
   };
 
-  // 11. Save Initial Balance & Org Name
+  // 12. Save Initial Balance & Org Name
   const handleSaveInitialBalance = (data: { orgName: string; initialBalance: number }) => {
     const authorName = settings.currentRole === 'bendahara' ? 'Bendahara' : 'Admin/Dev';
-    const updated = {
+    
+    // Update active period's initial balance
+    const updatedPeriods = settings.periods.map((p) => {
+      if (p.id === activePeriod.id) {
+        return {
+          ...p,
+          initialBalance: data.initialBalance,
+        };
+      }
+      return p;
+    });
+
+    const updated: AppSettings = {
       ...settings,
       orgName: data.orgName,
       initialBalance: data.initialBalance,
+      periods: updatedPeriods,
     };
     setSettings(updated);
     saveStoredSettings(updated);
 
-    const newLog = addStoredLog('SETTINGS', authorName, `Ubah saldo awal jadi Rp ${data.initialBalance.toLocaleString('id-ID')} & nama: ${data.orgName}`);
+    const newLog = addStoredLog(
+      'SETTINGS', 
+      authorName, 
+      `Ubah saldo awal Periode ${activePeriod.name} jadi Rp ${data.initialBalance.toLocaleString('id-ID')} & nama: ${data.orgName}`
+    );
     setLogs((prev) => [newLog, ...prev]);
-    showToast('Pengaturan saldo awal berhasil disimpan', 'success');
+    showToast(`Pengaturan saldo awal Periode ${activePeriod.name} disimpan`, 'success');
 
     if (settings.googleSheetUrl) {
-      syncSettingsToGoogleSheet(settings.googleSheetUrl, data, authorName).catch(console.error);
+      syncSettingsToGoogleSheet(settings.googleSheetUrl, updated, authorName).catch(console.error);
     }
   };
 
-  // 12. Save Google Sheet URL
+  // 13. Save Google Sheet URL
   const handleSaveGoogleSheetUrl = (url: string) => {
     const updated = { ...settings, googleSheetUrl: url };
     setSettings(updated);
@@ -332,6 +548,7 @@ export const App: React.FC = () => {
         onRoleChange={handleRoleChange}
         isSyncing={isSyncing}
         onSync={() => handleSyncSheet(false)}
+        onOpenPeriodModal={() => setIsPeriodModalOpen(true)}
         onOpenGoogleSheetModal={() => setIsGoogleSheetModalOpen(true)}
         onOpenDeveloperModal={() => setIsDeveloperModalOpen(true)}
         onOpenExportModal={() => setIsExportModalOpen(true)}
@@ -367,11 +584,14 @@ export const App: React.FC = () => {
 
         {/* Hero Section: Saldo & Ringkasan */}
         <BalanceCard
-          initialBalance={settings.initialBalance || 0}
+          initialBalance={activePeriod.initialBalance || 0}
           totalIncome={totalIncome}
           totalExpense={totalExpense}
           finalBalance={finalBalance}
           isLoading={isSyncing && !hasLoadedInitial}
+          activePeriodName={activePeriod.name}
+          isPeriodClosed={activePeriod.status === 'closed'}
+          onOpenPeriodModal={() => setIsPeriodModalOpen(true)}
           onOpenIncomeModal={() => {
             setEditingTransaction(null);
             setActiveTxType('income');
@@ -389,6 +609,8 @@ export const App: React.FC = () => {
         {/* Transactions List */}
         <TransactionList
           transactions={filteredTransactions}
+          activePeriodName={activePeriod.name}
+          isPeriodClosed={activePeriod.status === 'closed'}
           onEdit={(tx) => {
             setEditingTransaction(tx);
             setActiveTxType(tx.type);
@@ -426,11 +648,24 @@ export const App: React.FC = () => {
         />
       )}
 
+      <PeriodManagerModal
+        isOpen={isPeriodModalOpen}
+        onClose={() => setIsPeriodModalOpen(false)}
+        periods={settings.periods}
+        activePeriodId={settings.activePeriodId}
+        transactions={transactions}
+        currentPeriodFinalBalance={finalBalance}
+        onSelectPeriod={handleSelectPeriod}
+        onCreatePeriod={handleCreatePeriod}
+        onTogglePeriodStatus={handleTogglePeriodStatus}
+        onDeletePeriod={handleDeletePeriod}
+      />
+
       <InitialBalanceModal
         isOpen={isBalanceModalOpen}
         onClose={() => setIsBalanceModalOpen(false)}
         orgName={settings.orgName}
-        initialBalance={settings.initialBalance || 0}
+        initialBalance={activePeriod.initialBalance || 0}
         onSave={handleSaveInitialBalance}
       />
 
@@ -454,11 +689,12 @@ export const App: React.FC = () => {
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        transactions={transactions}
+        transactions={periodTransactions}
         settings={settings}
-        initialBalance={settings.initialBalance || 0}
-        totalIncome={allTotalIncome}
-        totalExpense={allTotalExpense}
+        activePeriodName={activePeriod.name}
+        initialBalance={activePeriod.initialBalance || 0}
+        totalIncome={allPeriodIncome}
+        totalExpense={allPeriodExpense}
         finalBalance={finalBalance}
       />
     </div>

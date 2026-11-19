@@ -8,7 +8,8 @@ import {
   FileSpreadsheet, 
   UserCheck, 
   Terminal,
-  Smartphone
+  Smartphone,
+  CalendarRange
 } from 'lucide-react';
 import { UserRole, AppSettings } from '../types';
 
@@ -18,6 +19,7 @@ interface HeaderProps {
   onRoleChange: (role: UserRole) => void;
   isSyncing: boolean;
   onSync: () => void;
+  onOpenPeriodModal: () => void;
   onOpenGoogleSheetModal: () => void;
   onOpenDeveloperModal: () => void;
   onOpenExportModal: () => void;
@@ -31,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRoleChange,
   isSyncing,
   onSync,
+  onOpenPeriodModal,
   onOpenGoogleSheetModal,
   onOpenDeveloperModal,
   onOpenExportModal,
@@ -94,6 +97,15 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden md:inline">
                 {isSyncing ? 'Menyinkronkan...' : isSheetConnected ? 'Sinkron' : 'Lokal (Offline)'}
               </span>
+            </button>
+
+            {/* Period Manager Button */}
+            <button
+              onClick={onOpenPeriodModal}
+              className="p-2 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+              title="Kelola Periode Kepengurusan & Tutup Buku"
+            >
+              <CalendarRange className="w-4 h-4" />
             </button>
 
             {/* Export Button */}

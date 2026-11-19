@@ -2,6 +2,16 @@ export type TransactionType = 'income' | 'expense';
 
 export type UserRole = 'bendahara' | 'developer';
 
+export interface Period {
+  id: string; // e.g. "periode-2026-2028"
+  name: string; // e.g. "2026-2028"
+  initialBalance: number; // Saldo awal khusus periode ini
+  status: 'active' | 'closed'; // 'active' atau 'closed' (tutup buku)
+  createdAt: string; // ISO 8601 string
+  closedAt?: string;
+  notes?: string;
+}
+
 export interface Transaction {
   id: string;
   date: string; // YYYY-MM-DD
@@ -11,6 +21,7 @@ export interface Transaction {
   description: string;
   author: string; // 'Bendahara' or 'Admin'
   createdAt: string; // ISO 8601 string
+  periodId?: string; // ID periode kepengurusan (misal "periode-2026-2028")
 }
 
 export interface AuditLog {
@@ -28,6 +39,8 @@ export interface AppSettings {
   googleSheetUrl: string;
   currentRole: UserRole;
   lastSynced?: string;
+  activePeriodId: string; // Periode yang saat ini aktif/dipilih
+  periods: Period[]; // Daftar semua periode kepengurusan
 }
 
 export interface SheetSyncResponse {
@@ -37,6 +50,8 @@ export interface SheetSyncResponse {
     settings?: {
       orgName: string;
       initialBalance: number;
+      activePeriodId?: string;
+      periods?: Period[];
     };
     transactions: Transaction[];
     logs: AuditLog[];

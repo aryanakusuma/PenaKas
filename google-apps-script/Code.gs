@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * PENAKAS - GOOGLE APPS SCRIPT DATABASE SINKRONISASI
+ * PENAKAS - GOOGLE APPS SCRIPT DATABASE SINKRONISASI (v2 - Multi-Periode)
  * ============================================================================
  * Petunjuk Pemasangan:
  * 1. Buka spreadsheet baru di Google Sheets (sheets.new).
@@ -9,7 +9,7 @@
  * 4. Klik tombol "Simpan" (ikon disket / Ctrl+S).
  * 5. Klik tombol "Terapkan" (Deploy) > "Kelola Penerapan" atau "Penerapan Baru" (New Deployment).
  * 6. Pilih jenis: "Aplikasi Web" (Web App).
- *    - Deskripsi: PenaKas API v1
+ *    - Deskripsi: PenaKas API v2
  *    - Jalankan sebagai: "Saya" (Me - email akun Google kamu)
  *    - Yang memiliki akses: "Siapa saja" (Anyone) -> WAJIB agar aplikasi HP/Laptop bisa kirim data!
  * 7. Klik "Terapkan" (Deploy), berikan izin Google jika diminta.
@@ -33,10 +33,16 @@ function setupSheets() {
       "Nominal",
       "Keterangan",
       "Diinput Oleh",
-      "Waktu Dibuat"
+      "Waktu Dibuat",
+      "Periode"
     ]);
-    sheetTransaksi.getRange("A1:H1").setFontWeight("bold").setBackground("#d1fae5");
+    sheetTransaksi.getRange("A1:I1").setFontWeight("bold").setBackground("#d1fae5");
     sheetTransaksi.setFrozenRows(1);
+  } else {
+    // Tambahkan header Periode jika belum ada di kolom 9
+    if (sheetTransaksi.getLastColumn() < 9) {
+      sheetTransaksi.getRange(1, 9).setValue("Periode").setFontWeight("bold").setBackground("#d1fae5");
+    }
   }
 
   // 2. Tab Pengaturan
@@ -44,8 +50,16 @@ function setupSheets() {
   if (!sheetPengaturan) {
     sheetPengaturan = ss.insertSheet("Pengaturan");
     sheetPengaturan.appendRow(["Kunci", "Nilai"]);
-    sheetPengaturan.appendRow(["nama_organisasi", "Kas Organisasi"]);
+    sheetPengaturan.appendRow(["nama_organisasi", "PC IPM Pringsewu"]);
     sheetPengaturan.appendRow(["saldo_awal", "0"]);
+    sheetPengaturan.appendRow(["periode_aktif", "periode-2026-2028"]);
+    sheetPengaturan.appendRow(["daftar_periode", JSON.stringify([{
+      id: "periode-2026-2028",
+      name: "2026-2028",
+      initialBalance: 0,
+      status: "active",
+      createdAt: new Date().toISOString()
+    }])]);
     sheetPengaturan.getRange("A1:B1").setFontWeight("bold").setBackground("#e0e7ff");
     sheetPengaturan.setFrozenRows(1);
   }
@@ -117,7 +131,7 @@ function doPost(e) {
     if (action === "update_settings") {
       const settings = payload.settings;
       updateSettingsRow(settings);
-      addAuditLog("SETTINGS", payload.author || "Admin", "Memperbarui pengaturan saldo awal / nama organisasi");
+      addAuditLog("SETTINGS", payload.author || "Admin", "Memperbarui pengaturan saldo awal / nama organisasi / periode");
       return createJsonResponse({ success: true, message: "Pengaturan berhasil disimpan" });
     }
 
@@ -132,24 +146,56 @@ function getAllData() {
 
   // Ambil Pengaturan
   const sheetPengaturan = ss.getSheetByName("Pengaturan");
-  let orgName = "Kas Organisasi";
+  let orgName = "PC IPM Pringsewu";
   let initialBalance = 0;
+  let activePeriodId = "periode-2026-2028";
+  let periods = [];
+
   if (sheetPengaturan) {
     const dataSettings = sheetPengaturan.getDataRange().getValues();
     for (let i = 1; i < dataSettings.length; i++) {
-      if (dataSettings[i][0] === "nama_organisasi") orgName = String(dataSettings[i][1] || "");
-      if (dataSettings[i][0] === "saldo_awal") initialBalance = Number(dataSettings[i][1] || 0);
+      const key = String(dataSettings[i][0] || "");
+      const val = dataSettings[i][1];
+      if (key === "nama_organisasi") orgName = String(val || "");
+      if (key === "saldo_awal") initialBalance = Number(val || 0);
+      if (key === "periode_aktif") activePeriodId = String(val || "");
+      if (key === "daftar_periode") {
+        try {
+          periods = JSON.parse(String(val || "[]"));
+        } catch (e) {
+          periods = [];
+        }
+      }
     }
+  }
+
+  // Fallback nama organisasi
+  if (!orgName || orgName === "Kas Organisasi" || orgName === "BEM / Himpunan Mahasiswa") {
+    orgName = "PC IPM Pringsewu";
+  }
+
+  // Fallback periods jika belum ada
+  if (!periods || periods.length === 0) {
+    periods = [{
+      id: activePeriodId || "periode-2026-2028",
+      name: "2026-2028",
+      initialBalance: initialBalance,
+      status: "active",
+      createdAt: new Date().toISOString()
+    }];
+    activePeriodId = periods[0].id;
   }
 
   // Ambil Transaksi
   const sheetTransaksi = ss.getSheetByName("Transaksi");
   const transactions = [];
   if (sheetTransaksi && sheetTransaksi.getLastRow() > 1) {
-    const rows = sheetTransaksi.getRange(2, 1, sheetTransaksi.getLastRow() - 1, 8).getValues();
+    const numCols = Math.max(8, sheetTransaksi.getLastColumn());
+    const rows = sheetTransaksi.getRange(2, 1, sheetTransaksi.getLastRow() - 1, numCols).getValues();
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (!row[0]) continue;
+      const periodId = row.length >= 9 && row[8] ? String(row[8]) : activePeriodId;
       transactions.push({
         id: String(row[0]),
         date: formatDate(row[1]),
@@ -158,7 +204,8 @@ function getAllData() {
         amount: Number(row[4] || 0),
         description: String(row[5] || ""),
         author: String(row[6] || "Bendahara"),
-        createdAt: String(row[7] || "")
+        createdAt: String(row[7] || ""),
+        periodId: periodId
       });
     }
   }
@@ -185,7 +232,9 @@ function getAllData() {
   return {
     settings: {
       orgName: orgName,
-      initialBalance: initialBalance
+      initialBalance: initialBalance,
+      activePeriodId: activePeriodId,
+      periods: periods
     },
     transactions: transactions,
     logs: logs
@@ -203,7 +252,8 @@ function addTransactionRow(tx) {
     Number(tx.amount),
     tx.description,
     tx.author,
-    tx.createdAt || new Date().toISOString()
+    tx.createdAt || new Date().toISOString(),
+    tx.periodId || ""
   ]);
 }
 
@@ -219,6 +269,9 @@ function updateTransactionRow(tx) {
       sheet.getRange(i + 1, 5).setValue(Number(tx.amount));
       sheet.getRange(i + 1, 6).setValue(tx.description);
       sheet.getRange(i + 1, 7).setValue(tx.author);
+      if (tx.periodId) {
+        sheet.getRange(i + 1, 9).setValue(tx.periodId);
+      }
       return;
     }
   }
@@ -240,22 +293,32 @@ function updateSettingsRow(settings) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Pengaturan");
   const data = sheet.getDataRange().getValues();
-  let foundOrg = false;
-  let foundSaldo = false;
+  const keysFound = {};
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === "nama_organisasi") {
+    const key = data[i][0];
+    if (key === "nama_organisasi" && settings.orgName !== undefined) {
       sheet.getRange(i + 1, 2).setValue(settings.orgName);
-      foundOrg = true;
+      keysFound[key] = true;
     }
-    if (data[i][0] === "saldo_awal") {
+    if (key === "saldo_awal" && settings.initialBalance !== undefined) {
       sheet.getRange(i + 1, 2).setValue(Number(settings.initialBalance));
-      foundSaldo = true;
+      keysFound[key] = true;
+    }
+    if (key === "periode_aktif" && settings.activePeriodId !== undefined) {
+      sheet.getRange(i + 1, 2).setValue(settings.activePeriodId);
+      keysFound[key] = true;
+    }
+    if (key === "daftar_periode" && settings.periods !== undefined) {
+      sheet.getRange(i + 1, 2).setValue(JSON.stringify(settings.periods));
+      keysFound[key] = true;
     }
   }
 
-  if (!foundOrg) sheet.appendRow(["nama_organisasi", settings.orgName]);
-  if (!foundSaldo) sheet.appendRow(["saldo_awal", Number(settings.initialBalance)]);
+  if (settings.orgName && !keysFound["nama_organisasi"]) sheet.appendRow(["nama_organisasi", settings.orgName]);
+  if (settings.initialBalance !== undefined && !keysFound["saldo_awal"]) sheet.appendRow(["saldo_awal", Number(settings.initialBalance)]);
+  if (settings.activePeriodId && !keysFound["periode_aktif"]) sheet.appendRow(["periode_aktif", settings.activePeriodId]);
+  if (settings.periods && !keysFound["daftar_periode"]) sheet.appendRow(["daftar_periode", JSON.stringify(settings.periods)]);
 }
 
 function addAuditLog(action, author, details, txId) {

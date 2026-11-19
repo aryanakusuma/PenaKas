@@ -7,7 +7,11 @@ import {
   Edit3, 
   Building2,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  CalendarRange,
+  Lock,
+  ChevronDown,
+  Sparkles
 } from 'lucide-react';
 import { formatIDR } from '../utils/formatters';
 
@@ -17,6 +21,9 @@ interface BalanceCardProps {
   totalExpense: number;
   finalBalance: number;
   isLoading?: boolean;
+  activePeriodName: string;
+  isPeriodClosed?: boolean;
+  onOpenPeriodModal: () => void;
   onOpenIncomeModal: () => void;
   onOpenExpenseModal: () => void;
   onEditInitialBalance: () => void;
@@ -31,6 +38,9 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   totalExpense,
   finalBalance,
   isLoading = false,
+  activePeriodName,
+  isPeriodClosed = false,
+  onOpenPeriodModal,
   onOpenIncomeModal,
   onOpenExpenseModal,
   onEditInitialBalance,
@@ -40,6 +50,64 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
 }) => {
   return (
     <div className="space-y-4">
+      {/* Bar Pemilihan & Status Periode */}
+      <div className="bg-white rounded-2xl px-4 py-2.5 border border-slate-200/80 shadow-sm flex items-center justify-between gap-2">
+        <button
+          onClick={onOpenPeriodModal}
+          className="group flex items-center gap-2 min-w-0 text-left hover:opacity-80 transition-opacity"
+          title="Klik untuk ganti atau buka periode baru"
+        >
+          <div className="w-8 h-8 rounded-xl bg-emerald-100/70 text-emerald-800 flex items-center justify-center shrink-0">
+            <CalendarRange className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Masa Jabatan / Periode:
+              </span>
+              {isPeriodClosed ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 flex items-center gap-0.5">
+                  <Lock className="w-2.5 h-2.5" /> Tutup Buku
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700">
+                  Aktif
+                </span>
+              )}
+            </div>
+            <p className="text-xs sm:text-sm font-extrabold text-slate-800 truncate flex items-center gap-1">
+              <span>Periode {activePeriodName}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:translate-y-0.5 transition-transform" />
+            </p>
+          </div>
+        </button>
+
+        <button
+          onClick={onOpenPeriodModal}
+          className="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors shrink-0 flex items-center gap-1.5"
+        >
+          <span>Ganti / Tutup Buku</span>
+        </button>
+      </div>
+
+      {/* Banner Peringatan jika Periode Sudah Tutup Buku */}
+      {isPeriodClosed && (
+        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-2 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              <b>Periode ini sudah Ditutup Buku.</b> Laporan di bawah ini bersifat arsip LPJ.
+            </span>
+          </div>
+          <button
+            onClick={onOpenPeriodModal}
+            className="text-amber-800 font-bold underline hover:text-amber-950 shrink-0"
+          >
+            Buka Periode Baru
+          </button>
+        </div>
+      )}
+
       {/* Hero Card: Saldo Utama */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-5 sm:p-6 text-white shadow-xl shadow-slate-900/10">
         
@@ -58,7 +126,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
             <button
               onClick={onEditInitialBalance}
               className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-sm transition-colors border border-white/10"
-              title="Atur Saldo Awal PC IPM Pringsewu"
+              title="Atur Saldo Awal Periode Ini"
             >
               <Building2 className="w-3 h-3 text-emerald-300" />
               <span>Saldo Awal: {formatIDR(initialBalance)}</span>
@@ -81,7 +149,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
               </h2>
             )}
             <p className="text-xs text-slate-300/80 mt-1">
-              {isLoading ? 'Sedang mengambil saldo terbaru dari Google Sheet...' : 'Dihitung otomatis: Saldo Awal + Total Masuk - Total Keluar'}
+              {isLoading ? 'Sedang mengambil saldo terbaru dari Google Sheet...' : `Saldo Kas Periode ${activePeriodName} (Saldo Awal + Masuk - Keluar)`}
             </p>
           </div>
 
@@ -106,19 +174,19 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         </div>
       </div>
 
-      {/* Filter Periode & Ringkasan 2 Kolom */}
+      {/* Filter Periode Bulan & Ringkasan 2 Kolom */}
       <div className="flex items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
           <Calendar className="w-3.5 h-3.5" />
-          <span>Ringkasan Periode:</span>
+          <span>Filter Bulan di Periode {activePeriodName}:</span>
         </div>
         <select
           value={selectedMonth}
           onChange={(e) => onMonthChange(e.target.value)}
-          aria-label="Pilih Periode Transaksi"
+          aria-label="Pilih Bulan Transaksi"
           className="text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg px-2.5 py-1.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
         >
-          <option value="ALL">Semua Waktu</option>
+          <option value="ALL">Semua Bulan</option>
           {availableMonths.map((m) => (
             <option key={m} value={m}>
               {m}
